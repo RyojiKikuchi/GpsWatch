@@ -132,4 +132,6 @@ GPS未接続または測位前は LED が消灯し、約5秒ごとに表示が�
 
 ## ライセンス
 
-`mcc_generated_files/` 以下のファイルは Microchip Technology Inc. が提供するコードです。その他のコードは本リポジトリの著作者に帰属します。
+このプロジェクトは [MIT License](LICENSE) のもとで公開されています。
+
+`mcc_generated_files/` 以下のファイルは Microchip Technology Inc. が提供するコードであり、Microchip の利用規約に従います。その他のコードは MIT License に基づき自由に利用できます。
