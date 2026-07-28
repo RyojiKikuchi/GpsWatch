@@ -1,0 +1,52 @@
+# ============================
+# MPLAB X IDE 6.30 / XC8 3.10 最適 .gitignore
+# プロジェクト構成：/src にソース格納、MCC 未使用
+# ============================
+
+# --- MPLAB X プロジェクト設定 ---
+# 個人設定は除外
+nbproject/private/
+
+# 自動生成される Makefile 類は除外
+nbproject/Makefile-*
+nbproject/Package-*
+nbproject/Makefile-genesis.properties
+
+# configurations.xml は共有したいので除外しない
+# （デバイス設定、XC8 オプション、リンカ設定などが含まれる）
+
+# --- ビルド生成物 ---
+build/
+dist/
+debug/
+release/
+
+# --- XC8 コンパイラ生成物 ---
+*.d
+*.o
+*.obj
+*.p1
+*.lst
+*.map
+*.hex
+*.elf
+*.cof
+*.as
+*.s
+
+# --- MPLAB X キャッシュ ---
+*.X.db
+*.X.pdb
+
+# --- OS / エディタ ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# --- Python / ツールスクリプト（任意） ---
+__pycache__/
+*.pyc
+
+# --- ログ ---
+*.log
