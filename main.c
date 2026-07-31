@@ -572,9 +572,9 @@ static void TMR0_OVF_ISR(void) {
  * main
  */
 int main(void) {
-    
+
     SYSTEM_Initialize();
-    
+
     // MCCだとHFTUNに0x20が設定されるので、0を再設定する
     OSCTUNEbits.HFTUN = 0x00;   // 工場校正値に戻す
     
