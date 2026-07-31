@@ -407,19 +407,15 @@ static int8_t char_calc(char *a, int8_t b, uint8_t max_number, char *ret_char) {
 
 static void set_disp_time(void) {
     char time_buf[6];
-//    time_buf[0] = g_hour[0];
-//    time_buf[1] = g_hour[1];
-    time_buf[0] = g_minute[0];
-    time_buf[1] = g_minute[1];
+    time_buf[0] = g_hour[0];
+    time_buf[1] = g_hour[1];
     if (g_second[1] & 0x01U) {
         time_buf[2] = ';';  // space
     } else {
         time_buf[2] = ':';
     }
-//    time_buf[3] = g_minute[0];
-//    time_buf[4] = g_minute[1];
-    time_buf[3] = g_second[0];
-    time_buf[4] = g_second[1];
+    time_buf[3] = g_minute[0];
+    time_buf[4] = g_minute[1];
     time_buf[5] = '\0';
     set_disp_buf(time_buf);
 }
@@ -428,7 +424,7 @@ static void set_disp_time(void) {
  * RMCメッセージのパース
  * $GPRMC,,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
  * $GPRMC,000000.000,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
- * $GPRMC,035645.000,A,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+ * $GPRMC,042700.000,A,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
  */
 static void parse_rmc(char *message) {
     char buffer[10];
@@ -511,7 +507,6 @@ static void uart_read_line(void) {
     uint8_t idx = 0;
     char c;
     while (1) {
-        TMR0L = 0;
         while (!EUSART1_IsRxReady()) {
            TMR0_TMRInterruptDisable();
             if (need_local_sec_add > 0) {
