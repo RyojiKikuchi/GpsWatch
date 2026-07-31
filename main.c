@@ -444,27 +444,18 @@ static void parse_rmc(char *message) {
     disp_led = 0x80U;
     nmea_last_received_sec = 0;
 
-    char hour[2];
-    
     // 年月日時分秒取得
-    len = scan_copy(message, &pos, ',', hour, 2);
+    len = scan_copy(message, &pos, ',', g_hour, 2);
     if (len != 2) {
         return;
     }
-
     // 時刻情報あり
     disp_led |= 0x40U;
-
-    // 時刻バッファクリア
-    scan_copy(DEFAULT_DATETIME, &pos, '\0', g_datetime, sizeof (DEFAULT_DATETIME));
-    g_hour[0] = hour[0];
-    g_hour[1] = hour[1];
-
     len = scan_copy(message, &pos, ',', g_minute, 2);
     len = scan_copy(message, &pos, '.', g_second, 2);
     len = scan_copy(message, &pos, ',', buffer, sizeof (buffer)); // ミリ秒
 
-    int8_t c = char_calc(g_hour, DIFFERENCE_FROM_UTC, 24, g_hour);
+    char_calc(g_hour, DIFFERENCE_FROM_UTC, 24, g_hour);
 
     time_retrieved = true;
 
