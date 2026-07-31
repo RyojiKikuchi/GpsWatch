@@ -1,12 +1,12 @@
 /**
- * Interrupt Manager Generated Driver File
+ * Interrupt Manager Generated Driver API Header File
+ * 
+ * @file interrupt.h
+ * 
+ * @defgroup interrupt INTERRUPT
+ * 
+ * @brief This file contains API prototypes and other data types for the Interrupt Manager driver.
  *
- * @file interrupt.c
- * 
- * @ingroup interrupt 
- * 
- * @brief This file contains the API implementation for the Interrupt Manager driver.
- * 
  * @version Interrupt Manager Driver Version 2.0.6
 */
 
@@ -31,79 +31,136 @@
     THIS SOFTWARE.
 */
 
-#include "../../system/interrupt.h"
-#include "../../system/system.h"
-#include "../pins.h"
+#ifndef INTERRUPT_H
+#define INTERRUPT_H
 
-void (*INT_InterruptHandler)(void);
-
-void  INTERRUPT_Initialize (void)
-{
-    // Clear the interrupt flag
-    EXT_INT_InterruptFlagClear();   
-    // Set Default Interrupt Handler
-    INT_SetInterruptHandler(INT_DefaultInterruptHandler);
-    // EXT_INT_InterruptEnable();
-
-}
 
 /**
  * @ingroup interrupt
- * @brief Services the Interrupt Service Routines (ISR) of enabled interrupts and is called every time an interrupt is triggered.
+ * @brief Enables global interrupts.
+ * @param None.
+ * @return None.
+ */
+#define INTERRUPT_GlobalInterruptEnable() (INTCONbits.GIE = 1)
+
+/**
+ * @ingroup interrupt
+ * @brief Disables global interrupts.
+ * @param None.
+ * @return None.
+ */
+#define INTERRUPT_GlobalInterruptDisable() (INTCONbits.GIE = 0)
+
+/**
+ * @ingroup interrupt
+ * @brief Returns the Global Interrupt Enable bit status.
+ * @param None.
+ * @retval 0 - Global interrupt disabled.
+ * @retval 1 - Global interrupt enabled.
+ */
+#define INTERRUPT_GlobalInterruptStatus() (INTCONbits.GIE)
+
+/**
+ * @ingroup interrupt
+ * @brief Enables peripheral interrupts.
+ * @param None.
+ * @return None.
+ */
+#define INTERRUPT_PeripheralInterruptEnable() (INTCONbits.PEIE = 1)
+
+/**
+ * @ingroup interrupt
+ * @brief Disables peripheral interrupts.
+ * @param None.
+ * @return None.
+ */
+#define INTERRUPT_PeripheralInterruptDisable() (INTCONbits.PEIE = 0)
+
+/**
+ * @ingroup interrupt
+ * @brief Initializes peripheral interrupt priorities, enables or disables priority vectors and initializes the external interrupt.
+ * @param None.
+ * @return None.
+ */
+void INTERRUPT_Initialize (void);
+
+
+/**
+ * @ingroup interrupt
+ * @brief Clears the Interrupt flag for the external interrupt, INT.
+ * @param None.
+ * @return None.
+ */
+#define EXT_INT_InterruptFlagClear()       (PIR0bits.INTF = 0)
+
+/**
+ * @ingroup interrupt
+ * @brief Clears the interrupt enable for the external interrupt, INT. This way, the external interrupts on this pin will not be serviced by the interrupt handler.
+ * @param None.
+ * @return None.
+ */
+#define EXT_INT_InterruptDisable()     (PIE0bits.INTE = 0)
+
+/**
+ * @ingroup interrupt
+ * @brief Sets the interrupt enable for the external interrupt, INT. This way, the external interrupts on this pin will be serviced by the interrupt handler.
+ * @param None.
+ * @return None.
+ */
+#define EXT_INT_InterruptEnable()       (PIE0bits.INTE = 1)
+
+
+
+/**
+   Section: External Interrupt Handlers
+ */
+
+/**
+ * @ingroup interrupt
+ * @brief Executes the ISR whenever the signal on the INT pin transitions to the preconfigured state.
  * @pre Interrupt Manager is initialized.
  * @param None.
  * @return None.
  */
-void __interrupt() INTERRUPT_InterruptManager (void)
-{
-    // interrupt handler
-    if(INTCONbits.PEIE == 1)
-    {
-        if(PIE3bits.BCL1IE == 1 && PIR3bits.BCL1IF == 1)
-        {
-            I2C1_ERROR_ISR();
-        } 
-        else if(PIE3bits.SSP1IE == 1 && PIR3bits.SSP1IF == 1)
-        {
-            I2C1_ISR();
-        } 
-        else
-        {
-            //Unhandled Interrupt
-        }
-    }      
-    else
-    {
-        //Unhandled Interrupt
-    }
-}
+void INT_ISR(void);
 
-void INT_ISR(void)
-{
-    EXT_INT_InterruptFlagClear();
+/**
+ * @ingroup interrupt
+ * @brief Allows for a specific callback function to be called in the INT ISR and for a nonspecific interrupt handler to be called at run time.
+ * @pre Interrupt Manager is initialized.
+ * @param None.
+ * @return None.
+ */
+void INT_CallBack(void);
 
-    // Callback function gets called everytime this ISR executes
-    INT_CallBack();    
-}
+/**
+ * @ingroup interrupt
+ * @brief Allows selecting an interrupt handler for EXT_INT - INT at application run time.
+ * @pre Interrupt Manager is initialized.
+ * @param (*InterruptHandler)(void) - InterruptHandler function pointer.
+ * @return None.
+ */
+void INT_SetInterruptHandler(void (* InterruptHandler)(void));
 
+/**
+ * @ingroup interrupt
+ * @brief Dynamic interrupt handler to be called every time the INT ISR is executed. It allows any function to be registered at run time.
+ * @pre Interrupt Manager is initialized.
+ * @param None.
+ * @return None.
+ */
+extern void (*INT_InterruptHandler)(void);
 
-void INT_CallBack(void)
-{
-    // Add your custom callback code here
-    if(INT_InterruptHandler)
-    {
-        INT_InterruptHandler();
-    }
-}
+/**
+ * @ingroup interrupt
+ * @brief Default interrupt handler to be called every time the INT ISR is executed. It allows any function to be registered at run time.
+ * @pre Interrupt Manager is initialized.
+ * @param None.
+ * @return None.
+ */
+void INT_DefaultInterruptHandler(void);
 
-void INT_SetInterruptHandler(void (* InterruptHandler)(void)){
-    INT_InterruptHandler = InterruptHandler;
-}
-
-void INT_DefaultInterruptHandler(void){
-    // add your INT interrupt custom code
-    // or set custom function using INT_SetInterruptHandler()
-}
+#endif  // INTERRUPT_H
 /**
  End of File
 */
