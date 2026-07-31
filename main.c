@@ -423,16 +423,13 @@ static void set_disp_time(void) {
 /*
  * RMCメッセージのパース
  * $GPRMC,,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
- * $GPRMC,000000.000,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+ * $GPRMC,053315.000,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
  * $GPRMC,053315.000,A,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
  */
 static void parse_rmc(char *message) {
     char buffer[10];
     uint8_t pos = 0;
     uint8_t len;
-
-    // 時刻バッファクリア
-    scan_copy(DEFAULT_DATETIME, &pos, '\0', g_datetime, sizeof (DEFAULT_DATETIME));
 
     // メッセージ判定
     pos = 0;
@@ -447,20 +444,30 @@ static void parse_rmc(char *message) {
     disp_led = 0x80U;
     nmea_last_received_sec = 0;
 
+    char hour[2];
+    
     // 年月日時分秒取得
-    len = scan_copy(message, &pos, ',', g_hour, 2);
-    if (len == 2) {
-        // 時刻情報あり
-        disp_led |= 0x40U;
-
-        len = scan_copy(message, &pos, ',', g_minute, 2);
-        len = scan_copy(message, &pos, '.', g_second, 2);
-        len = scan_copy(message, &pos, ',', buffer, sizeof (buffer)); // ミリ秒
-
-        int8_t c = char_calc(g_hour, DIFFERENCE_FROM_UTC, 24, g_hour);
-
-        time_retrieved = true;
+    len = scan_copy(message, &pos, ',', hour, 2);
+    if (len != 2) {
+        return;
     }
+
+    // 時刻情報あり
+    disp_led |= 0x40U;
+
+    // 時刻バッファクリア
+    scan_copy(DEFAULT_DATETIME, &pos, '\0', g_datetime, sizeof (DEFAULT_DATETIME));
+    g_hour[0] = hour[0];
+    g_hour[1] = hour[1];
+
+    len = scan_copy(message, &pos, ',', g_minute, 2);
+    len = scan_copy(message, &pos, '.', g_second, 2);
+    len = scan_copy(message, &pos, ',', buffer, sizeof (buffer)); // ミリ秒
+
+    int8_t c = char_calc(g_hour, DIFFERENCE_FROM_UTC, 24, g_hour);
+
+    time_retrieved = true;
+
     len = scan_copy(message, &pos, ',', g_status, 1);
 
     if (g_status[0] == 'A') {
