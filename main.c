@@ -424,7 +424,7 @@ static void set_disp_time(void) {
  * RMCメッセージのパース
  * $GPRMC,,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
  * $GPRMC,000000.000,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
- * $GPRMC,042700.000,A,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+ * $GPRMC,053315.000,A,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
  */
 static void parse_rmc(char *message) {
     char buffer[10];
@@ -572,7 +572,12 @@ static void TMR0_OVF_ISR(void) {
  * main
  */
 int main(void) {
+
     SYSTEM_Initialize();
+
+    // MCCだとHFTUNに0x20が設定されるので、0を再設定する
+    OSCTUNEbits.HFTUN = 0x00;   // 工場校正値に戻す
+    
     // If using interrupts in PIC18 High/Low Priority Mode you need to enable the Global High and Low Interrupts 
     // If using interrupts in PIC Mid-Range Compatibility Mode you need to enable the Global and Peripheral Interrupts 
     // Use the following macros to: 
