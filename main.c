@@ -56,15 +56,15 @@ static uint8_t disp_buffer_length = 0; // Display表示バッファの長さ
 
 static uint8_t disp_raw_buffer[17]; // I2Cに出力する表示バッファ(addres(1)+data(16))
 
-static volatile uint8_t disp_led = 0U; // LED点灯制御(先頭3bit)
+volatile static uint8_t disp_led = 0U; // LED点灯制御(先頭3bit)
 
 static bool i2c_error = true; // I2C通信でエラー発生
 
-static volatile uint8_t nmea_last_received_sec = 0; // nmeaセンテンス受信後の経過秒数
+volatile static uint8_t nmea_last_received_sec = 0; // nmeaセンテンス受信後の経過秒数
 
 static bool time_retrieved = false; // 時刻取得済み
-static volatile uint8_t need_local_sec_add = 0;
-static volatile bool need_display_update = false;
+volatile static uint8_t need_local_sec_add = 0;
+volatile static bool need_display_update = false;
 
 static char g_datetime[] = DEFAULT_DATETIME; // GPSデータ格納バッファ
 static char *g_hour = &g_datetime[0]; // 時
