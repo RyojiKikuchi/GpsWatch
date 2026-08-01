@@ -462,17 +462,17 @@ static void parse_zda(void) {
         return;
     }
     // 時刻情報あり
+    len += scan_copy(uart_buf, &pos, ',', g_minute, 2);
+    len += scan_copy(uart_buf, &pos, '.', g_second, 2);
+    scan_copy(uart_buf, &pos, ',', buffer, sizeof (buffer)); // ミリ秒
+    len += scan_copy(uart_buf, &pos, ',', g_day, 2);
+    len += scan_copy(uart_buf, &pos, ',', g_month, 2);
+    if (len < 10) return;
     disp_led |= 0x40U;
-    len = scan_copy(uart_buf, &pos, ',', g_minute, 2);
-    len = scan_copy(uart_buf, &pos, '.', g_second, 2);
-    len = scan_copy(uart_buf, &pos, ',', buffer, sizeof (buffer)); // ミリ秒
-    len = scan_copy(uart_buf, &pos, ',', g_day, 2);
-    len = scan_copy(uart_buf, &pos, ',', g_month, 2);
-
+    
     add_hours(DIFFERENCE_FROM_UTC);
 
     time_retrieved = true;
-
 
     set_disp_time();
 
@@ -507,56 +507,6 @@ static void parse_rmc(void) {
     }
     
 }
-
-/*
- * RMCメッセージのパース
- * $GPRMC,,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
- * $GPRMC,135950.000,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
- * $GPRMC,145950.000,A,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
-static void parse_rmc(void) {
-    char buffer[10];
-    uint8_t pos = 0;
-    uint8_t len;
-
-    // メッセージ判定
-    len = scan_copy(uart_buf, &pos, ',', buffer, sizeof (buffer));
-    if (!(len == 6 && buffer[0] == '$' && buffer[1] == 'G' &&
-            buffer[3] == 'R' && buffer[4] == 'M' && buffer[5] == 'C')) {
-        // RMCメッセージ以外
-        return;
-    }
-
-    // RMC受信成功
-    disp_led = 0x80U;
-    nmea_last_received_sec = 0;
-
-    // 年月日時分秒取得
-    len = scan_copy(uart_buf, &pos, ',', g_hour, 2);
-    if (len != 2) {
-        return;
-    }
-    // 時刻情報あり
-    disp_led |= 0x40U;
-    len = scan_copy(uart_buf, &pos, ',', g_minute, 2);
-    len = scan_copy(uart_buf, &pos, '.', g_second, 2);
-    len = scan_copy(uart_buf, &pos, ',', buffer, sizeof (buffer)); // ミリ秒
-
-    add_hours(DIFFERENCE_FROM_UTC);
-    //char_calc(g_hour, DIFFERENCE_FROM_UTC, 0, 24, g_hour);
-
-    time_retrieved = true;
-
-    len = scan_copy(uart_buf, &pos, ',', g_status, 1);
-
-    if (g_status[0] == 'A') {
-        // ステータス有効
-        disp_led |= 0x20U;
-    }
-
-    set_disp_time();
-
-}
- */
 
 /*
  * HT16K33A初期化
