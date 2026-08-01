@@ -46,15 +46,15 @@
 #include "mcc_generated_files/system/system.h"
 
 #define SLAVE_ADDRESS 0x70      // I2C スレーブアドレス
-#define DEFAULT_DATETIME "00:00:00V"  // GPS取得領域の初期値
+#define DEFAULT_DATETIME "00/00 00:00:00V"  // GPS取得領域の初期値
 #define UART_BUFFER_SIZE 32     // シリアル通信の受信バッファサイズ
 #define DIFFERENCE_FROM_UTC 9
 
 static char uart_buf[UART_BUFFER_SIZE]; // シリアル通信受信バッファ
-static uint32_t disp_buffer[5]; // Display表示バッファ(32bit))
+static uint32_t disp_buffer[5] = {0, 0, 0, 0, 0}; // Display表示バッファ(32bit))
 static uint8_t disp_buffer_length = 0; // Display表示バッファの長さ
 
-static uint8_t disp_raw_buffer[17]; // I2Cに出力する表示バッファ(addres(1)+data(16))
+static uint8_t disp_raw_buffer[17] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // I2Cに出力する表示バッファ(addres(1)+data(16))
 
 volatile static uint8_t disp_led = 0U; // LED点灯制御(先頭3bit)
 
@@ -67,13 +67,15 @@ volatile static uint8_t need_local_sec_add = 0;
 volatile static bool need_display_update = false;
 
 static char g_datetime[] = DEFAULT_DATETIME; // GPSデータ格納バッファ
-static char *g_hour = &g_datetime[0]; // 時
-static char *g_minute = &g_datetime[3]; // 分
-static char *g_second = &g_datetime[6]; // 秒
-static char *g_status = &g_datetime[8]; // ステータス
+static char *g_month = &g_datetime[0]; // 月
+static char *g_day = &g_datetime[3]; // 日
+static char *g_hour = &g_datetime[6]; // 時
+static char *g_minute = &g_datetime[9]; // 分
+static char *g_second = &g_datetime[12]; // 秒
+static char *g_status = &g_datetime[14]; // ステータス
 
 // DisplayメモリからI2C出力情報への変換表
-static const uint8_t matrix_conv[][21] = {
+static const uint8_t matrix_conv[5][21] = {
     {0x07U, 0x27U, 0x47U, 0x67U, 0x87U, 0xA7U, 0xC7U, 0x02U, 0x22U, 0x42U, 0x62U, 0x82U, 0xA2U, 0xC2U, 0x15U, 0x35U, 0x55U, 0x75U, 0x95U, 0xB5U, 0xD5U},
     {0x06U, 0x26U, 0x46U, 0x66U, 0x86U, 0xA6U, 0xC6U, 0x01U, 0x21U, 0x41U, 0x61U, 0x81U, 0xA1U, 0xC1U, 0x14U, 0x34U, 0x54U, 0x74U, 0x94U, 0xB4U, 0xD4U},
     {0x05U, 0x25U, 0x45U, 0x65U, 0x85U, 0xA5U, 0xC5U, 0x00U, 0x20U, 0x40U, 0x60U, 0x80U, 0xA0U, 0xC0U, 0x13U, 0x33U, 0x53U, 0x73U, 0x93U, 0xB3U, 0xD3U},
@@ -82,7 +84,7 @@ static const uint8_t matrix_conv[][21] = {
 };
 
 // 各月の日数
-//static const uint8_t days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+static const uint8_t days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 // キャラクタデータの件数
 #define DISP_DATA_COUNT 0x0FU
@@ -180,21 +182,14 @@ static void i2c_recovery(void) {
 static uint8_t get_disp_bits(uint8_t index, uint8_t *disp_bits) {
 
     uint8_t d0 = disp_data[index][0];
-
     uint8_t bit_len = d0 >> 5; // 上位3bitがビット長
-    uint8_t raw = d0 & 0x1F; // 下位5bitが最初のデータ
-    uint8_t bit_mask = 0x80U;
-    for (uint8_t i = 1; i < bit_len; i++) {
-        bit_mask >>= 1;
-        bit_mask |= 0x80U;
-    }
 
     // 32bitに連結
-    uint32_t all = (uint32_t) raw << 27 | (uint32_t) disp_data[index][1] << 19 | (uint32_t) disp_data[index][2] << 11;
+    uint32_t all = (uint32_t) (d0 & 0x1F) << 27 | (uint32_t) disp_data[index][1] << 19 | (uint32_t) disp_data[index][2] << 11;
 
     // 5分割して返却（不足bitは0埋め）
     for (uint8_t i = 0; i < 5; i++) {
-        disp_bits[i] = (all >> 24) & bit_mask;
+        disp_bits[i] = all >> 24;
         all <<= bit_len;
     }
 
@@ -250,6 +245,7 @@ static bool set_disp_buffer(uint8_t bit_len, uint8_t *disp_bits) {
  * ディスプレイメモリをI2C出力情報に変換する
  */
 static void set_disp_raw_buf() {
+
     // バッファ初期化
     for (uint8_t i = 0U; i < 17U; i++) {
         disp_raw_buffer[i] = 0U;
@@ -261,11 +257,8 @@ static void set_disp_raw_buf() {
         uint32_t bitmask = 0x80000000U;
         for (uint8_t col = 0U; col < 21U; col++) {
             uint8_t conv = matrix_conv[row][col];
-            uint8_t idx = (conv >> 4) + 1U;
-            uint8_t bit_pos = conv & 0xFU;
-            uint32_t led_on = disp_buffer[row] & bitmask;
-            if (led_on) {
-                disp_raw_buffer[idx] |= (0x80U >> bit_pos);
+            if (disp_buffer[row] & bitmask) {
+                disp_raw_buffer[(conv >> 4) + 1U] |= (0x80U >> (conv & 0x0FU));
             }
             bitmask >>= 1;
         }
@@ -287,17 +280,16 @@ static void set_disp_raw_buf() {
  * UARTで受信した文字をDisplayに設定する
  */
 static void set_disp_buf(char *disp_message) {
-    //uint8_t pos = 0U;
-    uint8_t char_pos = 0;
+
     uint8_t data_bits[5];
     disp_buffer_length = 0;
 
-    while (disp_message[char_pos] != '\0') {
-        uint8_t c = disp_message[char_pos++] - 0x30U;
+    while (*disp_message != '\0') {
+        uint8_t c = *(disp_message++) - 0x30U;
         if (c > DISP_DATA_COUNT) {
             continue;
         }
-        // 
+
         uint8_t bit_length = get_disp_bits(c, data_bits);
         if (!set_disp_buffer(bit_length, data_bits)) {
             break;
@@ -305,42 +297,30 @@ static void set_disp_buf(char *disp_message) {
     }
 }
 
-static void rotate_disp_buf() {
-    for (uint8_t i = 0; i < 5; i++) {
-        bool carry = ((disp_buffer[i] & 0x80000000U) != 0);
-        disp_buffer[i] <<= 1;
-        if (carry) {
-            disp_buffer[i] |= 0x80000000U >> disp_buffer_length;
-        }
+/*
+ * ディスプレイへ1byte出力する
+ */
+static void disp_puts(uint8_t *write_data, uint8_t length) {
+    while (I2C1_IsBusy());
+    I2C1_Write(SLAVE_ADDRESS, write_data, length);
+    if (I2C1_ErrorGet() != I2C_ERROR_NONE) {
+        // 【通信失敗】デバイスがない、またはNACKが返ってきた
+        // エラー種類: I2C_ERROR_ADDR_NACK（アドレス不一致）など
+        i2c_error = true;
     }
+    __delay_us(5);
+    while (I2C1_IsBusy());
 }
 
 /*
  * ディスプレイへ表示データを出力する
  */
 static void disp_put_dispdata() {
-    while (I2C1_IsBusy());
-    I2C1_Write(SLAVE_ADDRESS, disp_raw_buffer, 17);
-    while (I2C1_IsBusy());
-    if (I2C1_ErrorGet() != I2C_ERROR_NONE) {
-        // 【通信失敗】デバイスがない、またはNACKが返ってきた
-        // エラー種類: I2C_ERROR_ADDR_NACK（アドレス不一致）など
-        i2c_error = true;
-    }
+    disp_puts(disp_raw_buffer, 17);
 }
 
-/*
- * ディスプレイへ1byte出力する
- */
 static void disp_put(uint8_t write_data) {
-    while (I2C1_IsBusy());
-    I2C1_Write(SLAVE_ADDRESS, &write_data, 1);
-    while (I2C1_IsBusy());
-    if (I2C1_ErrorGet() != I2C_ERROR_NONE) {
-        // 【通信失敗】デバイスがない、またはNACKが返ってきた
-        // エラー種類: I2C_ERROR_ADDR_NACK（アドレス不一致）など
-        i2c_error = true;
-    }
+    disp_puts(&write_data, 1);
 }
 
 /*
@@ -380,25 +360,27 @@ static void uint8_to_char(uint8_t num, char *cnum) {
     cnum[1] = m + 0x30U;
 }
 
-static int8_t char_calc(char *a, int8_t b, uint8_t max_number, char *ret_char) {
+static int8_t char_calc(char *a, int8_t b, uint8_t min_number, uint8_t max_number, char *ret_char) {
     uint8_t ca = char_to_uint8(a);
     uint8_t ret_number;
     int8_t carry = 0;
     if (b < 0) {
         // マイナス
-        uint8_t pb = (uint8_t) (b ^ 0xFF) + 1;
-        if (ca < pb) {
+        uint8_t pb = ((uint8_t) (b ^ 0xFF) + 1) + min_number;
+        if (ca < (pb)) {
             carry = -1;
             ret_number = ca + max_number - pb;
         } else {
             ret_number = ca - pb;
         }
+
     } else {
         // プラス
         ret_number = ca + (uint8_t) b;
         if (ret_number >= max_number) {
             carry = 1;
             ret_number -= max_number;
+            ret_number += min_number;
         }
     }
     uint8_to_char(ret_number, ret_char);
@@ -406,34 +388,138 @@ static int8_t char_calc(char *a, int8_t b, uint8_t max_number, char *ret_char) {
 }
 
 static void set_disp_time(void) {
-    char time_buf[6];
-    time_buf[0] = g_hour[0];
-    time_buf[1] = g_hour[1];
-    if (g_second[1] & 0x01U) {
-        time_buf[2] = ';';  // space
+    static char time_buf[] = "\0\0\0\0\0\0";
+    if (g_second[1] & 0x04U) {
+        time_buf[0] = g_month[0];
+        time_buf[1] = g_month[1];
+        time_buf[2] = ';'; // space
+        time_buf[3] = g_day[0];
+        time_buf[4] = g_day[1];
+
     } else {
-        time_buf[2] = ':';
+
+        time_buf[0] = g_hour[0];
+        time_buf[1] = g_hour[1];
+        if (g_second[1] & 0x01U) {
+            time_buf[2] = ';'; // space
+        } else {
+            time_buf[2] = ':';
+        }
+        time_buf[3] = g_minute[0];
+        time_buf[4] = g_minute[1];
+
     }
-    time_buf[3] = g_minute[0];
-    time_buf[4] = g_minute[1];
-    time_buf[5] = '\0';
     set_disp_buf(time_buf);
 }
 
+static void add_hours(int8_t add_hours) {
+    int8_t c = char_calc(g_hour, add_hours, 0, 24, g_hour);
+    if (c == 0) return;
+    uint8_t i_month = char_to_uint8(g_month);
+    uint8_t i_day = char_to_uint8(g_day);
+    if (i_month < 1U || i_month > 12U) return;
+    uint8_t i_days = days_in_month[i_month - 1U];
+    
+    // 日付＋1
+    i_day++;
+    if (i_day > i_days) {
+        i_day = 1;
+        i_month++;
+        if (i_month > 12) {
+            i_month = 1;
+        }
+    }
+    uint8_to_char(i_day, g_day);
+    uint8_to_char(i_month, g_month);
+}
+
 /*
- * RMCメッセージのパース
- * $GPRMC,,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
- * $GPRMC,053315.000,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
- * $GPRMC,053315.000,A,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+ * ZDAメッセージのパース
+ * $GPZDA,,,,,,*61
+ * $GPZDA,172715.0000,01,08,2021,00,00*61
  */
-static void parse_rmc(char *message) {
+static void parse_zda(void) {
     char buffer[10];
     uint8_t pos = 0;
     uint8_t len;
 
     // メッセージ判定
-    pos = 0;
-    len = scan_copy(message, &pos, ',', buffer, sizeof (buffer));
+    len = scan_copy(uart_buf, &pos, ',', buffer, sizeof (buffer));
+    if (!(len == 6 && buffer[0] == '$' && buffer[1] == 'G' &&
+            buffer[3] == 'Z' && buffer[4] == 'D' && buffer[5] == 'A')) {
+        // RMCメッセージ以外
+        return;
+    }
+
+    // ZDA受信成功
+    disp_led &= 0x3FU;
+    disp_led |= 0x80U;
+    nmea_last_received_sec = 0;
+
+    // 年月日時分秒取得
+    len = scan_copy(uart_buf, &pos, ',', g_hour, 2);
+    if (len != 2) {
+        return;
+    }
+    // 時刻情報あり
+    disp_led |= 0x40U;
+    len = scan_copy(uart_buf, &pos, ',', g_minute, 2);
+    len = scan_copy(uart_buf, &pos, '.', g_second, 2);
+    len = scan_copy(uart_buf, &pos, ',', buffer, sizeof (buffer)); // ミリ秒
+    len = scan_copy(uart_buf, &pos, ',', g_day, 2);
+    len = scan_copy(uart_buf, &pos, ',', g_month, 2);
+
+    add_hours(DIFFERENCE_FROM_UTC);
+
+    time_retrieved = true;
+
+
+    set_disp_time();
+
+}
+
+/*
+ * RMCメッセージのパース
+ * $GPRMC,,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+ * $GPRMC,135950.000,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+ * $GPRMC,145950.000,A,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+ */
+static void parse_rmc(void) {
+    char buffer[30];
+    uint8_t pos = 0;
+    uint8_t len;
+
+    // メッセージ判定
+    len = scan_copy(uart_buf, &pos, 'A', buffer, sizeof (buffer));
+    if (!(len >= 6 && buffer[0] == '$' && buffer[1] == 'G' &&
+            buffer[3] == 'R' && buffer[4] == 'M' && buffer[5] == 'C')) {
+        // RMCメッセージ以外
+        return;
+    }
+    
+    // RMC受信成功
+    disp_led &= 0xDFU;
+    
+    // 先頭から25文字目までにAが出てきたら有効と判定する
+    if (len <= 25) {
+        // データ有効
+        disp_led |= 0x20U;
+    }
+    
+}
+
+/*
+ * RMCメッセージのパース
+ * $GPRMC,,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+ * $GPRMC,135950.000,V,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+ * $GPRMC,145950.000,A,3539.1234,N,13944.5678,E,012.3,245.5,280726,,,A*6A
+static void parse_rmc(void) {
+    char buffer[10];
+    uint8_t pos = 0;
+    uint8_t len;
+
+    // メッセージ判定
+    len = scan_copy(uart_buf, &pos, ',', buffer, sizeof (buffer));
     if (!(len == 6 && buffer[0] == '$' && buffer[1] == 'G' &&
             buffer[3] == 'R' && buffer[4] == 'M' && buffer[5] == 'C')) {
         // RMCメッセージ以外
@@ -445,21 +531,22 @@ static void parse_rmc(char *message) {
     nmea_last_received_sec = 0;
 
     // 年月日時分秒取得
-    len = scan_copy(message, &pos, ',', g_hour, 2);
+    len = scan_copy(uart_buf, &pos, ',', g_hour, 2);
     if (len != 2) {
         return;
     }
     // 時刻情報あり
     disp_led |= 0x40U;
-    len = scan_copy(message, &pos, ',', g_minute, 2);
-    len = scan_copy(message, &pos, '.', g_second, 2);
-    len = scan_copy(message, &pos, ',', buffer, sizeof (buffer)); // ミリ秒
+    len = scan_copy(uart_buf, &pos, ',', g_minute, 2);
+    len = scan_copy(uart_buf, &pos, '.', g_second, 2);
+    len = scan_copy(uart_buf, &pos, ',', buffer, sizeof (buffer)); // ミリ秒
 
-    char_calc(g_hour, DIFFERENCE_FROM_UTC, 24, g_hour);
+    add_hours(DIFFERENCE_FROM_UTC);
+    //char_calc(g_hour, DIFFERENCE_FROM_UTC, 0, 24, g_hour);
 
     time_retrieved = true;
 
-    len = scan_copy(message, &pos, ',', g_status, 1);
+    len = scan_copy(uart_buf, &pos, ',', g_status, 1);
 
     if (g_status[0] == 'A') {
         // ステータス有効
@@ -469,21 +556,22 @@ static void parse_rmc(char *message) {
     set_disp_time();
 
 }
+ */
 
 /*
  * HT16K33A初期化
  */
 static void disp_init() {
     // オシレータ起動
-    disp_put(0x21);
+    disp_put(0x21U);
     // Display OFF
-    disp_put(0x80);
+    disp_put(0x80U);
     // ROW/INTをROWに設定
-    disp_put(0xA0);
+    disp_put(0xA0U);
     // 明るさ設定
-    disp_put(0xEF);
+    disp_put(0xEFU);
     // Display ON
-    disp_put(0x81);
+    disp_put(0x81U);
 
     i2c_error = false;
 }
@@ -492,9 +580,9 @@ static void countup_sec_local(int8_t add_seconds) {
     if (!time_retrieved) {
         return;
     }
-    int8_t c = char_calc(g_second, add_seconds, 60, g_second);
-    c = char_calc(g_minute, c, 60, g_minute);
-    c = char_calc(g_hour, c, 24, g_hour);
+    int8_t c = char_calc(g_second, add_seconds, 0, 60, g_second);
+    c = char_calc(g_minute, c, 0, 60, g_minute);
+    add_hours(c);
     set_disp_time();
 }
 
@@ -506,17 +594,17 @@ static void uart_read_line(void) {
     char c;
     while (1) {
         while (!EUSART1_IsRxReady()) {
-           TMR0_TMRInterruptDisable();
+            TMR0_TMRInterruptDisable();
             if (need_local_sec_add > 0) {
                 countup_sec_local((int8_t) need_local_sec_add);
-            } 
+            }
             if (need_display_update) {
                 set_disp_raw_buf();
                 disp_put_dispdata();
                 need_local_sec_add = 0;
                 need_display_update = false;
             }
-           TMR0_TMRInterruptEnable();
+            TMR0_TMRInterruptEnable();
         }
         c = (char) EUSART1_Read();
         switch (c) {
@@ -558,10 +646,10 @@ static void TMR0_OVF_ISR(void) {
 
     if ((disp_led & 0x40U) == 0 && time_retrieved) {
         // GPSから時刻情報が取得できていないため、ローカルで1秒のカウントアップを行う
+        disp_led = 0U;
         need_local_sec_add = local_add_sec;
         need_display_update = true;
         nmea_last_received_sec = 0;
-        disp_led = 0x20U;
     }
 
 }
@@ -574,8 +662,8 @@ int main(void) {
     SYSTEM_Initialize();
 
     // MCCだとHFTUNに0x20が設定されるので、0を再設定する
-    OSCTUNEbits.HFTUN = 0x00;   // 工場校正値に戻す
-    
+    OSCTUNEbits.HFTUN = 0x00; // 工場校正値に戻す
+
     // If using interrupts in PIC18 High/Low Priority Mode you need to enable the Global High and Low Interrupts 
     // If using interrupts in PIC Mid-Range Compatibility Mode you need to enable the Global and Peripheral Interrupts 
     // Use the following macros to: 
@@ -603,7 +691,7 @@ int main(void) {
     set_disp_buf("00:00");
     need_display_update = true;
     TMR0_TMRInterruptEnable();
- 
+
     while (1) {
 
         // I2Cエラー発生時にはdisp_init実行
@@ -617,7 +705,8 @@ int main(void) {
         LED_SetHigh();
 
         TMR0_TMRInterruptDisable();
-        parse_rmc(uart_buf);
+        parse_rmc();
+        parse_zda();
         set_disp_raw_buf();
         disp_put_dispdata();
         TMR0_TMRInterruptEnable();
