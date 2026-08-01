@@ -417,8 +417,8 @@ static void add_hours(int8_t add_hours) {
     if (c == 0) return;
     uint8_t i_month = char_to_uint8(g_month);
     uint8_t i_day = char_to_uint8(g_day);
-    if (i_month < 1 && i_month > 12) return;
-    uint8_t i_days = days_in_month[i_month - 1];
+    if (i_month < 1U || i_month > 12U) return;
+    uint8_t i_days = days_in_month[i_month - 1U];
     
     // 日付＋1
     i_day++;
