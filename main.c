@@ -67,8 +67,8 @@ volatile static uint8_t need_local_sec_add = 0;
 volatile static bool need_display_update = false;
 
 static char g_datetime[] = DEFAULT_DATETIME; // GPSデータ格納バッファ
-static char *g_month = &g_datetime[0]; // 時
-static char *g_day = &g_datetime[3]; // 時
+static char *g_month = &g_datetime[0]; // 月
+static char *g_day = &g_datetime[3]; // 日
 static char *g_hour = &g_datetime[6]; // 時
 static char *g_minute = &g_datetime[9]; // 分
 static char *g_second = &g_datetime[12]; // 秒
