@@ -46,7 +46,7 @@
 #include "mcc_generated_files/system/system.h"
 
 #define SLAVE_ADDRESS 0x70      // I2C スレーブアドレス
-#define DEFAULT_DATETIME "00;00\000:00:00\0V"  // GPS取得領域の初期値
+#define DEFAULT_DATETIME "00;00" "\0" "00:00:00" "\0" "V"  // GPS取得領域の初期値
 #define UART_BUFFER_SIZE 32     // シリアル通信の受信バッファサイズ
 #define DIFFERENCE_FROM_UTC 9
 
@@ -118,22 +118,22 @@ static const uint8_t disp_data[][3] = {
 
 // キャラクタデータ
 static const uint8_t disp_data[][3] = {
-    {0x9FU, 0x33U, 0x3EU}, // 30 0
-    {0x82U, 0x22U, 0x22U}, // 31 1
-    {0x9EU, 0x3FU, 0x1EU}, // 32 2
-    {0x9EU, 0x3EU, 0x3EU}, // 33 3
-    {0x93U, 0x3EU, 0x22U}, // 34 4
-    {0x9FU, 0x1EU, 0x3EU}, // 35 5
-    {0x9FU, 0x1FU, 0x3EU}, // 36 6
-    {0x9EU, 0x22U, 0x22U}, // 37 7
-    {0x9FU, 0x3FU, 0x3EU}, // 38 8
-    {0x9FU, 0x3EU, 0x3EU}, // 39 9
-    {0x2AU, 0x00U, 0x00U}, // 3A :
-    {0x20U, 0x00U, 0x00U}, // 3B ; => (space)
-    {0x81U, 0x0DU, 0x0CU}, // 3C < => ㎞
-    {0x63U, 0x8EU, 0x00U}, // 3D =
-    {0x81U, 0x24U, 0x92U}, // 3E > => %
-    {0x8DU, 0x24U, 0x04U} // 3F ?
+    {0x4FU, 0x99U, 0x9FU}, // 30 0
+    {0x41U, 0x11U, 0x11U}, // 31 1
+    {0x4FU, 0x1FU, 0x8FU}, // 32 2
+    {0x4FU, 0x1FU, 0x1FU}, // 33 3
+    {0x49U, 0x9FU, 0x11U}, // 34 4
+    {0x4FU, 0x8FU, 0x1FU}, // 35 5
+    {0x4FU, 0x8FU, 0x9FU}, // 36 6
+    {0x4FU, 0x11U, 0x11U}, // 37 7
+    {0x4FU, 0x9FU, 0x9FU}, // 38 8
+    {0x4FU, 0x9FU, 0x1FU}, // 39 9
+    {0x10U, 0x80U, 0x80U}, // 3A :
+    {0x10U, 0x00U, 0x00U}, // 3B ; => (space)
+    {0x0AU, 0xCBU, 0x75U}, // 3C < => ㎞
+    {0x40U, 0x86U, 0x86U}, // 3D = => ℃
+    {0x40U, 0x92U, 0x49U}, // 3E > => %
+    {0x46U, 0x92U, 0x02U}, // 3F ?
 };
 
 #endif
@@ -205,6 +205,8 @@ static void i2c_recovery(void) {
     }
 }
 
+#ifdef AAA
+
 /*
  * キャラクタ情報を取得する
  */
@@ -224,6 +226,29 @@ static uint8_t get_disp_bits(uint8_t index, uint8_t *disp_bits) {
 
     return bit_len;
 }
+
+#else
+
+/*
+ * キャラクタ情報を取得する
+ */
+static uint8_t get_disp_bits(uint8_t index, uint8_t *disp_bits) {
+
+    uint8_t d0 = disp_data[index][0];
+    uint8_t d1 = disp_data[index][1];
+    uint8_t d2 = disp_data[index][2];
+
+    uint8_t bit_len = d0 >> 4; // 上位4bitがビット長
+    disp_bits[0] = (uint8_t) (d0 << 4);
+    disp_bits[1] = d1;
+    disp_bits[2] = (uint8_t) (d1 << 4);
+    disp_bits[3] = d2;
+    disp_bits[4] = (uint8_t) (d2 << 4);
+
+    return bit_len;
+}
+
+#endif
 
 /*
  * キャラクタ情報をDisplayメモリに設定する
@@ -374,7 +399,7 @@ static uint8_t scan_copy(char *buf, uint8_t *pos, char scan_char, char *copy_to,
 }
 
 static uint8_t char_to_uint8(const char *cnum) {
-    return (uint8_t)((cnum[0] * 10U) + cnum[1] - 528U);
+    return (uint8_t) ((cnum[0] * 10U) + cnum[1] - 528U);
 }
 
 static void uint8_to_char(uint8_t num, char *cnum) {
@@ -393,7 +418,7 @@ static int8_t char_calc(char *a, int8_t b, uint8_t max_number, char *ret_char) {
 
     if (b < 0) {
         // 負の数を正の数（uint8_t）の引き算に変換 (-b をコンパイラに任せる)
-        uint8_t pb = (uint8_t)(-b);
+        uint8_t pb = (uint8_t) (-b);
         if (ca < pb) {
             carry = -1;
             ca += max_number; // 先に足すことでアンダーフロー（負数）を防ぐ
@@ -401,7 +426,7 @@ static int8_t char_calc(char *a, int8_t b, uint8_t max_number, char *ret_char) {
         ca -= pb;
     } else {
         // 正の数の足し算
-        ca += (uint8_t)b;
+        ca += (uint8_t) b;
         if (ca >= max_number) {
             carry = 1;
             ca -= max_number;
