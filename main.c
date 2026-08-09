@@ -272,7 +272,11 @@ static void i2c_puts(uint16_t slave_address, uint8_t *send_data, uint8_t length)
 
     // Busy解除までWait
     tmr = 0;
-    while (I2C1_IsBusy() && tmr++ < I2C_TIME_OUT_TMR) {
+    while (I2C1_IsBusy()) {
+        if (tmr++ >= I2C_TIME_OUT_TMR) {
+            i2c_error = true;
+            return;
+        }
         __delay_us(100);
     }
 
@@ -615,7 +619,7 @@ static void parse_zda(void) {
 
     // メッセージ判定
     len = scan_copy(uart_buf, &pos, ',', buffer, sizeof (buffer));
-    if (!(len == 5 && buffer[0] == 'G' && 
+    if (!(len == 5 && buffer[0] == 'G' &&
             (talker_id == '\0' || buffer[1] == talker_id) &&
             buffer[2] == 'Z' && buffer[3] == 'D' && buffer[4] == 'A')) {
         // RMCメッセージ以外
@@ -663,7 +667,7 @@ static void parse_rmc(void) {
 
     // メッセージ判定
     len = scan_copy(uart_buf, &pos, 'A', buffer, sizeof (buffer));
-    if (!(len == 5 && buffer[0] == 'G' &&
+    if (!(len > 5 && buffer[0] == 'G' &&
             buffer[2] == 'R' && buffer[3] == 'M' && buffer[4] == 'C')) {
         // RMCメッセージ以外
         return;
@@ -755,7 +759,7 @@ static bool uart_read_line(void) {
                 chksum += h << 4;
             } else {
                 chksum |= h;
-                if (chksum == calc_chksum) 
+                if (chksum == calc_chksum)
                     chksum_valid = true;
             }
             continue;
@@ -845,7 +849,7 @@ int main(void) {
         }
 
         LED_SetLow();
-        if (!uart_read_line()){
+        if (!uart_read_line()) {
             continue;
         }
         LED_SetHigh();
