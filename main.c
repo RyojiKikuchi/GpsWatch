@@ -46,7 +46,7 @@
 #include "mcc_generated_files/system/system.h"
 
 #define SLAVE_ADDRESS 0x70      // I2C スレーブアドレス
-#define DEFAULT_DATETIME "00/00 00:00:00V"  // GPS取得領域の初期値
+#define DEFAULT_DATETIME "00;00" "\0" "00:00:00" "\0" "V"  // GPS取得領域の初期値
 #define UART_BUFFER_SIZE 32     // シリアル通信の受信バッファサイズ
 #define DIFFERENCE_FROM_UTC 9
 
@@ -70,9 +70,10 @@ static char g_datetime[] = DEFAULT_DATETIME; // GPSデータ格納バッファ
 static char *g_month = &g_datetime[0]; // 月
 static char *g_day = &g_datetime[3]; // 日
 static char *g_hour = &g_datetime[6]; // 時
+static char *g_time_minute_colon = &g_datetime[8]; // 分コロン
 static char *g_minute = &g_datetime[9]; // 分
 static char *g_second = &g_datetime[12]; // 秒
-static char *g_status = &g_datetime[14]; // ステータス
+static char *g_status = &g_datetime[15]; // ステータス
 
 // DisplayメモリからI2C出力情報への変換表
 static const uint8_t matrix_conv[5][21] = {
@@ -89,6 +90,10 @@ static const uint8_t days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31
 // キャラクタデータの件数
 #define DISP_DATA_COUNT 0x0FU
 
+#define LED_FONT_2
+
+#ifdef LED_FONT_1
+
 // キャラクタデータ
 static const uint8_t disp_data[][3] = {
     {0x8DU, 0x33U, 0x2CU}, // 30 0
@@ -102,12 +107,36 @@ static const uint8_t disp_data[][3] = {
     {0x8DU, 0x2DU, 0x2CU}, // 38 8
     {0x8DU, 0x2EU, 0x2CU}, // 39 9
     {0x2AU, 0x00U, 0x00U}, // 3A :
-    {0x20U, 0x00U, 0x00U}, // 3B ; => 20  
-    {0x65U, 0x44U, 0x40U}, // 3C <
+    {0x20U, 0x00U, 0x00U}, // 3B ; => (space)
+    {0x81U, 0x0DU, 0x0CU}, // 3C < => ㎞
     {0x63U, 0x8EU, 0x00U}, // 3D =
-    {0x71U, 0x15U, 0x00U}, // 3E >
+    {0x81U, 0x24U, 0x92U}, // 3E > => %
     {0x8DU, 0x24U, 0x04U}, // 3F ?
 };
+
+#else
+
+// キャラクタデータ
+static const uint8_t disp_data[][3] = {
+    {0x4FU, 0x99U, 0x9FU}, // 30 0
+    {0x41U, 0x11U, 0x11U}, // 31 1
+    {0x4FU, 0x1FU, 0x8FU}, // 32 2
+    {0x4FU, 0x1FU, 0x1FU}, // 33 3
+    {0x49U, 0x9FU, 0x11U}, // 34 4
+    {0x4FU, 0x8FU, 0x1FU}, // 35 5
+    {0x4FU, 0x8FU, 0x9FU}, // 36 6
+    {0x4FU, 0x11U, 0x11U}, // 37 7
+    {0x4FU, 0x9FU, 0x9FU}, // 38 8
+    {0x4FU, 0x9FU, 0x1FU}, // 39 9
+    {0x10U, 0x80U, 0x80U}, // 3A :
+    {0x10U, 0x00U, 0x00U}, // 3B ; => (space)
+    {0x0AU, 0xCBU, 0x75U}, // 3C < => ㎞
+    {0x40U, 0x86U, 0x86U}, // 3D = => ℃
+    {0x40U, 0x92U, 0x49U}, // 3E > => %
+    {0x46U, 0x92U, 0x02U}, // 3F ?
+};
+
+#endif
 
 /*
     Main application
@@ -182,16 +211,15 @@ static void i2c_recovery(void) {
 static uint8_t get_disp_bits(uint8_t index, uint8_t *disp_bits) {
 
     uint8_t d0 = disp_data[index][0];
-    uint8_t bit_len = d0 >> 5; // 上位3bitがビット長
+    uint8_t d1 = disp_data[index][1];
+    uint8_t d2 = disp_data[index][2];
 
-    // 32bitに連結
-    uint32_t all = (uint32_t) (d0 & 0x1F) << 27 | (uint32_t) disp_data[index][1] << 19 | (uint32_t) disp_data[index][2] << 11;
-
-    // 5分割して返却（不足bitは0埋め）
-    for (uint8_t i = 0; i < 5; i++) {
-        disp_bits[i] = all >> 24;
-        all <<= bit_len;
-    }
+    uint8_t bit_len = d0 >> 4; // 上位4bitがビット長
+    disp_bits[0] = (uint8_t) (d0 << 4);
+    disp_bits[1] = d1;
+    disp_bits[2] = (uint8_t) (d1 << 4);
+    disp_bits[3] = d2;
+    disp_bits[4] = (uint8_t) (d2 << 4);
 
     return bit_len;
 }
@@ -344,90 +372,89 @@ static uint8_t scan_copy(char *buf, uint8_t *pos, char scan_char, char *copy_to,
     return copied;
 }
 
-// char二桁をuint8_tに変換する
-
-static uint8_t char_to_uint8(char *cnum) {
-    return (cnum[0] - 0x30U) * 10U + (cnum[1] - 0x30U);
+static uint8_t char_to_uint8(const char *cnum) {
+    return (uint8_t) ((cnum[0] * 10U) + cnum[1] - 528U);
 }
 
-/*
- * uint8_tを二桁のcharに変換
- */
 static void uint8_to_char(uint8_t num, char *cnum) {
-    uint8_t q = (uint8_t) (((uint16_t) num * 205) >> 11);
-    uint8_t m = num - (q * 10);
-    cnum[0] = q + 0x30U;
-    cnum[1] = m + 0x30U;
+    uint8_t q = 0;
+    while (num >= 10U) {
+        num -= 10U;
+        q++;
+    }
+    cnum[0] = q + '0';
+    cnum[1] = num + '0';
 }
 
-static int8_t char_calc(char *a, int8_t b, uint8_t min_number, uint8_t max_number, char *ret_char) {
+static int8_t char_calc(char *a, int8_t b, uint8_t max_number, char *ret_char) {
     uint8_t ca = char_to_uint8(a);
-    uint8_t ret_number;
     int8_t carry = 0;
-    if (b < 0) {
-        // マイナス
-        uint8_t pb = ((uint8_t) (b ^ 0xFF) + 1) + min_number;
-        if (ca < (pb)) {
-            carry = -1;
-            ret_number = ca + max_number - pb;
-        } else {
-            ret_number = ca - pb;
-        }
 
+    if (b < 0) {
+        // 負の数を正の数（uint8_t）の引き算に変換 (-b をコンパイラに任せる)
+        uint8_t pb = (uint8_t) (-b);
+        if (ca < pb) {
+            carry = -1;
+            ca += max_number; // 先に足すことでアンダーフロー（負数）を防ぐ
+        }
+        ca -= pb;
     } else {
-        // プラス
-        ret_number = ca + (uint8_t) b;
-        if (ret_number >= max_number) {
+        // 正の数の足し算
+        ca += (uint8_t) b;
+        if (ca >= max_number) {
             carry = 1;
-            ret_number -= max_number;
-            ret_number += min_number;
+            ca -= max_number;
         }
     }
-    uint8_to_char(ret_number, ret_char);
+
+    uint8_to_char(ca, ret_char);
     return carry;
 }
 
+#define TEST3
+
 static void set_disp_time(void) {
-    static char time_buf[] = "\0\0\0\0\0\0";
     if (g_second[1] & 0x04U) {
-        time_buf[0] = g_month[0];
-        time_buf[1] = g_month[1];
-        time_buf[2] = ';'; // space
-        time_buf[3] = g_day[0];
-        time_buf[4] = g_day[1];
-
+        set_disp_buf(g_month);
     } else {
-
-        time_buf[0] = g_hour[0];
-        time_buf[1] = g_hour[1];
         if (g_second[1] & 0x01U) {
-            time_buf[2] = ';'; // space
+            *g_time_minute_colon = ';'; // space
         } else {
-            time_buf[2] = ':';
+            *g_time_minute_colon = ':';
         }
-        time_buf[3] = g_minute[0];
-        time_buf[4] = g_minute[1];
-
+        set_disp_buf(g_hour);
     }
-    set_disp_buf(time_buf);
 }
 
 static void add_hours(int8_t add_hours) {
-    int8_t c = char_calc(g_hour, add_hours, 0, 24, g_hour);
+    // 時刻の計算
+    int8_t c = char_calc(g_hour, add_hours, 24, g_hour);
+    // 繰り上がり／繰り下がりがなければ終了
     if (c == 0) return;
+    // 月をuint8_tに変換
     uint8_t i_month = char_to_uint8(g_month);
+    // 日をuint8_tに変換
     uint8_t i_day = char_to_uint8(g_day);
+    // 月が範囲外なら終了
     if (i_month < 1U || i_month > 12U) return;
+    // 月の最終日付を取得
     uint8_t i_days = days_in_month[i_month - 1U];
-    
-    // 日付＋1
-    i_day++;
+
+    // 日付の反映
+    i_day += c;
+    // 月の最終日を超えたら翌月一日にする
     if (i_day > i_days) {
         i_day = 1;
         i_month++;
         if (i_month > 12) {
             i_month = 1;
         }
+    } else if (i_day == 0) {
+        i_month--;
+        if (i_month == 0) {
+            i_month = 12;
+        }
+        i_day = days_in_month[i_month - 1U];
     }
     uint8_to_char(i_day, g_day);
     uint8_to_char(i_month, g_month);
@@ -469,7 +496,7 @@ static void parse_zda(void) {
     len += scan_copy(uart_buf, &pos, ',', g_month, 2);
     if (len < 10) return;
     disp_led |= 0x40U;
-    
+
     add_hours(DIFFERENCE_FROM_UTC);
 
     time_retrieved = true;
@@ -496,16 +523,16 @@ static void parse_rmc(void) {
         // RMCメッセージ以外
         return;
     }
-    
+
     // RMC受信成功
     disp_led &= 0xDFU;
-    
+
     // 先頭から25文字目までにAが出てきたら有効と判定する
     if (len <= 25) {
         // データ有効
         disp_led |= 0x20U;
     }
-    
+
 }
 
 /*
@@ -530,8 +557,8 @@ static void countup_sec_local(int8_t add_seconds) {
     if (!time_retrieved) {
         return;
     }
-    int8_t c = char_calc(g_second, add_seconds, 0, 60, g_second);
-    c = char_calc(g_minute, c, 0, 60, g_minute);
+    int8_t c = char_calc(g_second, add_seconds, 60, g_second);
+    c = char_calc(g_minute, c, 60, g_minute);
     add_hours(c);
     set_disp_time();
 }
@@ -638,7 +665,7 @@ int main(void) {
     TMR0_OverflowCallbackRegister(TMR0_OVF_ISR);
 
     TMR0_TMRInterruptDisable();
-    set_disp_buf("00:00");
+    set_disp_buf(g_hour);
     need_display_update = true;
     TMR0_TMRInterruptEnable();
 
